@@ -18,6 +18,12 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         return this.msg;
     }
 
+    /**
+     * A marker indicating the primary cause of the error/warning.
+     * This will be highlighted in red/yellow.
+     *
+     * @param <Msg>
+     */
     public static final class This<Msg extends Pretty<Msg>> extends Marker<Msg> {
         public This(final Msg message) {
             super(message);
@@ -34,6 +40,13 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         }
     }
 
+    /**
+     * A marker which adds context to the report.
+     * For example, this may be used to put additional type information in the error report
+     * (read as "this error happened, <i>where this variable has the type X</i>").
+     *
+     * @param <Msg>
+     */
     public static final class Where<Msg extends Pretty<Msg>> extends Marker<Msg> {
         public Where(Msg message) {
             super(message);
@@ -50,6 +63,11 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         }
     }
 
+    /**
+     * A specific kind of marker to output possible fixes for the current report.
+     *
+     * @param <Msg>
+     */
     public static final class Maybe<Msg extends Pretty<Msg>> extends Marker<Msg> {
         public Maybe(Msg message) {
             super(message);

@@ -53,6 +53,8 @@ public class Report<Msg extends Pretty<Msg>> {
     }
 
     /**
+     * Constructs a new report with no hints.
+     *
      * @see Report#Report(boolean, Pretty, Map, List)
      */
     public Report(final boolean isError, final Msg message, final Map<Position, Marker<Msg>> markers) {
@@ -149,6 +151,10 @@ public class Report<Msg extends Pretty<Msg>> {
 
         return doc;
     }
+
+    /////////////////////////////////////
+    //////////// INTERNAL ///////////////
+    /////////////////////////////////////
 
     private Document prettyAllLines(
             final Map<String, List<String>> files,
