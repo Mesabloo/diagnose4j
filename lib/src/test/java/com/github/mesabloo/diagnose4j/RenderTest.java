@@ -37,6 +37,8 @@ public class RenderTest {
         diag.print(System.out, true, true);
         System.out.println("--- With ASCII ---");
         diag.print(System.out, false, true);
+        System.out.println("--- Without colors ---");
+        diag.print(System.out, true, false);
 
         diag.clear();
     }
