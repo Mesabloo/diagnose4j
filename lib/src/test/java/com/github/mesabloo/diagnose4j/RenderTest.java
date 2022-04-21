@@ -14,7 +14,7 @@ public class RenderTest {
     private static final Map<String, String> files = new HashMap<>();
     static {
         files.put("test.zc", "let id<a>(x : a) : a := x + 1\nrec fix(f) := f(fix(f))\nlet const<a, b>(x : a, y : b) : a := x");
-        files.put("somefile.zs", "");
+        files.put("somefile.zc", "let id<a>(x : a) : a := x + 1\nrec fix(f) := f(fix(f))\nlet const<a, b>(x : a, y : b) : a := x");
         files.put("err.nst", "\n\n\n\n    = jmp g\n\n    g: forall(s: Ts, e: Tc).{ %r0: *s64 | s -> e }");
         files.put("unsized.nst", "main: forall(a: Ta, s: Ts, e: Tc).{ %r5: forall().{| s -> e } | s -> %r5 }\n    = salloc a\n    ; sfree\\n");
     }
@@ -99,5 +99,21 @@ public class RenderTest {
                             this.add(new StringPretty("Adding 'Num(a)' to the list of\nconstraints may solve this problem."));
                         }}
                 ));
+    }
+
+    @Test
+    public void multipleFiles() {
+        diag = diag
+                .withReport(new Report<>(true, new StringPretty("Error on multiple files"),
+                        new HashMap<Position, Marker<StringPretty>>() {{
+                            this.put(
+                                    new Position(1, 5, 1, 7, "test.zc"),
+                                    new Marker.Where<>(new StringPretty("Function already defined here"))
+                            );
+                            this.put(
+                                    new Position(1, 5, 1, 7, "somefile.zc"),
+                                    new Marker.This<>(new StringPretty("Function `id` already declared in another module"))
+                            );
+                        }}));
     }
 }

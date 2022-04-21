@@ -5,7 +5,7 @@ import com.github.tomaslanger.chalk.Ansi;
 
 import java.util.Objects;
 
-public abstract class Marker<Msg extends Pretty<Msg>> {
+public abstract class Marker<Msg extends Pretty<Msg>> implements Comparable<Marker<Msg>> {
     final Msg msg;
 
     private Marker(final Msg message) {
@@ -24,7 +24,7 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
      *
      * @param <Msg>
      */
-    public static final class This<Msg extends Pretty<Msg>> extends Marker<Msg> {
+    public static final class This<Msg extends Pretty<Msg>> extends Marker<Msg> implements Comparable<Marker<Msg>> {
         public This(final Msg message) {
             super(message);
         }
@@ -38,6 +38,14 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         public boolean equals(Object obj) {
             return obj instanceof This && super.equals(obj);
         }
+
+        @Override
+        public int compareTo(Marker<Msg> o) {
+            if (o instanceof This)
+                return 0;
+
+            return -1;
+        }
     }
 
     /**
@@ -47,7 +55,7 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
      *
      * @param <Msg>
      */
-    public static final class Where<Msg extends Pretty<Msg>> extends Marker<Msg> {
+    public static final class Where<Msg extends Pretty<Msg>> extends Marker<Msg> implements Comparable<Marker<Msg>> {
         public Where(Msg message) {
             super(message);
         }
@@ -61,6 +69,16 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         public boolean equals(Object obj) {
             return obj instanceof Where && super.equals(obj);
         }
+
+        @Override
+        public int compareTo(Marker<Msg> o) {
+            if (o instanceof Where)
+                return 0;
+            if (o instanceof This)
+                return 1;
+
+            return -1;
+        }
     }
 
     /**
@@ -68,7 +86,7 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
      *
      * @param <Msg>
      */
-    public static final class Maybe<Msg extends Pretty<Msg>> extends Marker<Msg> {
+    public static final class Maybe<Msg extends Pretty<Msg>> extends Marker<Msg> implements Comparable<Marker<Msg>> {
         public Maybe(Msg message) {
             super(message);
         }
@@ -81,6 +99,14 @@ public abstract class Marker<Msg extends Pretty<Msg>> {
         @Override
         public boolean equals(Object obj) {
             return obj instanceof Maybe && super.equals(obj);
+        }
+
+        @Override
+        public int compareTo(Marker<Msg> o) {
+            if (o instanceof Maybe)
+                return 0;
+
+            return 1;
         }
     }
 

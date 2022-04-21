@@ -6,6 +6,7 @@ import com.github.mesabloo.diagnose4j.report.Marker;
 import com.github.tomaslanger.chalk.Ansi;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -62,28 +63,14 @@ public class Report<Msg extends Pretty<Msg>> {
     }
 
     public Document pretty(final Map<String, List<String>> files, final boolean withUnicode) {
-        List<Map.Entry<Position, Marker<Msg>>> sortedMarkers = this.markers
+        Document doc = new Document();
+
+        final List<Map.Entry<Position, Marker<Msg>>> sortedMarkers = this.markers
                 .entrySet()
                 .stream()
                 .sorted(Map.Entry.comparingByKey())
                 .collect(Collectors.toList());
         // sort markers to have the first lines of the report at the beginning
-
-        final Map<Long, List<Map.Entry<Position, Marker<Msg>>>> inlineMarkers = new HashMap<>();
-        final List<Map.Entry<Position, Marker<Msg>>> multilineMarkers = new ArrayList<>();
-        this.splitInlineMarkers(sortedMarkers, inlineMarkers, multilineMarkers);
-        // split markers to separate inline and multiline markers
-        final List<Map.Entry<Long, List<Map.Entry<Position, Marker<Msg>>>>> sortedMarkerPerLine = inlineMarkers.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey())
-                .collect(Collectors.toList());
-
-        final Position reportFile = sortedMarkers.stream()
-                .filter(e -> e.getValue() instanceof Marker.This)
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElseGet(Position::def);
-        // retrieve the report file from the first `This` marker (ideally, there is only one in each report)
 
         final long maxLineNumberLength = Optional.ofNullable(sortedMarkers.isEmpty() ? null : sortedMarkers.get(sortedMarkers.size() - 1))
                 .map(pos -> Long.toString(pos.getKey().ending_line))
@@ -91,12 +78,7 @@ public class Report<Msg extends Pretty<Msg>> {
                 .orElse(3);
         // line numbers take at least 3 characters in width
 
-        final LongStream allLineNumbersInReport = LongStream.concat(
-                sortedMarkerPerLine.stream()
-                        .mapToLong(Map.Entry::getKey),
-                multilineMarkers.stream()
-                        .flatMapToLong(entry -> LongStream.rangeClosed(entry.getKey().beginning_line, entry.getKey().ending_line)));
-        // we need to record all line numbers in the report to show them all
+        final List<Map.Entry<Boolean, List<Map.Entry<Position, Marker<Msg>>>>> groupedMarkers = this.groupMarkersPerFile(sortedMarkers);
 
         final Doc header = new Doc(isError ? "[error]" : "[warning]")
                 .colors(isError ? Ansi.Color.RED : Ansi.Color.YELLOW, null, Ansi.Modifier.BOLD);
@@ -114,47 +96,141 @@ public class Report<Msg extends Pretty<Msg>> {
         (6)    -------+
         */
 
-        Document doc = new Document()
+        doc = doc
                 // (1)
                 .append(header)
                 .append(Doc.colon())
                 .append(Doc.space())
-                .appendDoc(this.msg.pretty().aligned())
-                .append(Doc.line())
-                // (2)
-                .append(Doc.space())
-                .appendDoc(this.pad(maxLineNumberLength, ' ', Doc.empty(), Function.identity()))
-                .append(Doc.space())
-                .append(new Doc(withUnicode ? "╭─▶" : "+->").colors(Ansi.Color.BLACK, null, Ansi.Modifier.BOLD))
-                .append(Doc.space())
-                .append(new Doc(reportFile).colors(Ansi.Color.GREEN, null, Ansi.Modifier.BOLD))
-                .append(Doc.line())
-                // (3)
-                .append(Doc.space())
-                .appendDoc(this.pipePrefix(maxLineNumberLength, withUnicode))
-                // (4)
-                .appendDoc(this.prettyAllLines(files, withUnicode, isError, maxLineNumberLength, sortedMarkerPerLine, multilineMarkers, allLineNumbersInReport))
-                .append(Doc.line());
-                // (5)
-        if (!hints.isEmpty() && !markers.isEmpty()) {
+                .appendDoc(this.msg.pretty().aligned());
+
+        for (final Map.Entry<Boolean, List<Map.Entry<Position, Marker<Msg>>>> entry : groupedMarkers) {
+            doc = doc
+                    .appendDoc(this.prettyAllSubReports(files, withUnicode, isError, maxLineNumberLength, entry.getKey(), entry.getValue()));
+        }
+
+        // (5)
+        if (!hints.isEmpty()) {
             doc
                     .append(Doc.space())
-                    .appendDoc(this.dotPrefix(maxLineNumberLength, withUnicode))
-                    .appendDoc(this.prettyAllHints(hints, maxLineNumberLength, withUnicode))
+                    .appendDoc(this.dotPrefix(maxLineNumberLength, withUnicode));
+        }
+        doc = doc
+                .appendDoc(this.prettyAllHints(hints, maxLineNumberLength, withUnicode))
+                .append(Doc.line());
+
+        if (!(markers.isEmpty() && hints.isEmpty())) {
+            // (6)
+            doc = doc
+                    .appendDoc(this.pad(maxLineNumberLength + 2, withUnicode ? '─' : '-', Doc.empty(), d -> d.colors(Ansi.Color.GRAY, null, Ansi.Modifier.BOLD)))
+                    .append(new Doc(withUnicode ? "╯" : "+").colors(Ansi.Color.GRAY, null, Ansi.Modifier.BOLD))
                     .append(Doc.line());
         }
-        doc
-                // (6)
-                .appendDoc(this.pad(maxLineNumberLength + 2, withUnicode ? '─' : '-', Doc.empty(), d -> d.colors(Ansi.Color.BLACK, null, Ansi.Modifier.BOLD)))
-                .append(new Doc(withUnicode ? "╯" : "+").colors(Ansi.Color.BLACK, null, Ansi.Modifier.BOLD))
-                ;
 
         return doc;
+    }
+
+    private List<Map.Entry<Boolean, List<Map.Entry<Position, Marker<Msg>>>>> groupMarkersPerFile(
+            List<Map.Entry<Position, Marker<Msg>>> sortedMarkers
+    ) {
+        final HashMap<String, List<Map.Entry<Position, Marker<Msg>>>> markersPerFile = new HashMap<>();
+
+        for (final Map.Entry<Position, Marker<Msg>> entry : sortedMarkers) {
+            final Position pos = entry.getKey();
+
+            final List<Map.Entry<Position, Marker<Msg>>> markers;
+            if (markersPerFile.containsKey(pos.file)) {
+                markers = markersPerFile.get(pos.file);
+            } else {
+                markers = new ArrayList<>();
+            }
+            markers.add(entry);
+
+            markersPerFile.put(pos.file, markers);
+        }
+
+        Comparator<List<Map.Entry<Position, Marker<Msg>>>> putThisAtTop = (e1, e2) -> {
+            if (e1.stream().anyMatch(e -> e.getValue() instanceof Marker.This))
+                return -1;
+            if (e2.stream().anyMatch(e -> e.getValue() instanceof Marker.This))
+                return 1;
+
+            return 0;
+        };
+
+        final AtomicBoolean isFirst = new AtomicBoolean(true);
+        return markersPerFile.values()
+                .stream()
+                .sorted(putThisAtTop)
+                .map(entries -> new AbstractMap.SimpleEntry<>(isFirst.getAndSet(false), entries))
+                .collect(Collectors.toList());
     }
 
     /////////////////////////////////////
     //////////// INTERNAL ///////////////
     /////////////////////////////////////
+
+    private Document prettyAllSubReports(
+            final Map<String, List<String>> files,
+            final boolean withUnicode,
+            final boolean isError,
+            final long maxLineNumberLength,
+            final boolean isFirst,
+            final List<Map.Entry<Position, Marker<Msg>>> markers
+    ) {
+        final Map<Long, List<Map.Entry<Position, Marker<Msg>>>> inlineMarkers = new HashMap<>();
+        final List<Map.Entry<Position, Marker<Msg>>> multilineMarkers = new ArrayList<>();
+        this.splitInlineMarkers(markers, inlineMarkers, multilineMarkers);
+        // split markers to separate inline and multiline markers
+        final List<Map.Entry<Long, List<Map.Entry<Position, Marker<Msg>>>>> sortedMarkerPerLine = inlineMarkers.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .collect(Collectors.toList());
+
+        final Position reportFile = markers.stream()
+                .sorted(Map.Entry.comparingByValue())
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseGet(Position::def);
+        // retrieve the report file from the first `This` marker (ideally, there is only one in each report)
+
+        final LongStream allLineNumbersInReport = LongStream.concat(
+                sortedMarkerPerLine.stream()
+                        .mapToLong(Map.Entry::getKey),
+                multilineMarkers.stream()
+                        .flatMapToLong(entry -> LongStream.rangeClosed(entry.getKey().beginning_line, entry.getKey().ending_line)));
+        // we need to record all line numbers in the report to show them all
+
+        Document fileMarker = new Document();
+        if (isFirst) {
+            fileMarker = fileMarker
+                    .append(Doc.space())
+                    .appendDoc(this.pad(maxLineNumberLength, ' ', Doc.empty(), Function.identity()))
+                    .append(Doc.space())
+                    .append(new Doc(withUnicode ? "╭──▶" : "+-->").colors(Ansi.Color.GRAY, null, Ansi.Modifier.BOLD))
+                    .append(Doc.space())
+                    .append(new Doc(reportFile).colors(Ansi.Color.GREEN, null, Ansi.Modifier.BOLD));
+        } else {
+            fileMarker = fileMarker
+                    .append(Doc.space())
+                    .appendDoc(this.dotPrefix(maxLineNumberLength, withUnicode))
+                    .append(Doc.line())
+                    .appendDoc(this.pad(maxLineNumberLength + 2, withUnicode ? '─' : '-', Doc.empty(), d -> d.colors(Ansi.Color.GRAY, null)))
+                    .append(new Doc(withUnicode ? "┼──▶" : "+-->").colors(Ansi.Color.GRAY, null))
+                    .append(Doc.space())
+                    .append(new Doc(reportFile).colors(Ansi.Color.GREEN, null, Ansi.Modifier.BOLD));
+        }
+
+        return new Document()
+                // (2)
+                .append(Doc.line())
+                .appendDoc(fileMarker)
+                .append(Doc.line())
+                // (3)
+                .append(Doc.space())
+                .appendDoc(this.pipePrefix(maxLineNumberLength, withUnicode))
+                // (4)
+                .appendDoc(this.prettyAllLines(files, withUnicode, isError, maxLineNumberLength, sortedMarkerPerLine, multilineMarkers, allLineNumbersInReport));
+    }
 
     private Document prettyAllLines(
             final Map<String, List<String>> files,
@@ -602,7 +678,7 @@ public class Report<Msg extends Pretty<Msg>> {
         return new Document()
                 .appendDoc(this.pad(max, ' ', Doc.empty(), Function.identity()))
                 .append(Doc.space())
-                .append(new Doc(withUnicode ? "│" : "|").colors(Ansi.Color.BLACK, null, Ansi.Modifier.BOLD));
+                .append(new Doc(withUnicode ? "│" : "|").colors(Ansi.Color.GRAY, null, Ansi.Modifier.BOLD));
     }
 
     /**
@@ -622,7 +698,7 @@ public class Report<Msg extends Pretty<Msg>> {
         return new Document()
                 .appendDoc(this.pad(max, ' ', Doc.empty(), Function.identity()))
                 .append(Doc.space())
-                .append(new Doc(withUnicode ? "•" : ":").colors(Ansi.Color.BLACK, null, Ansi.Modifier.BOLD));
+                .append(new Doc(withUnicode ? "•" : ":").colors(Ansi.Color.GRAY, null, Ansi.Modifier.BOLD));
     }
 
     /**
@@ -644,10 +720,10 @@ public class Report<Msg extends Pretty<Msg>> {
     private Document linePrefix(final long maxLineNumberLength, final long line, final boolean withUnicode) {
         final int lineNoLength = Long.toString(line).length();
         return new Document()
-                .appendDoc(this.pad(maxLineNumberLength - lineNoLength, ' ', Doc.empty(), d -> d.colors(Ansi.Color.BLACK, null)))
-                .append(Doc.space().colors(Ansi.Color.BLACK, null))
-                .append(new Doc(line).colors(Ansi.Color.BLACK, null))
-                .append(Doc.space().colors(Ansi.Color.BLACK, null))
-                .append(new Doc(withUnicode ? "│" : "|").colors(Ansi.Color.BLACK, null));
+                .appendDoc(this.pad(maxLineNumberLength - lineNoLength, ' ', Doc.empty(), d -> d.colors(Ansi.Color.GRAY, null)))
+                .append(Doc.space().colors(Ansi.Color.GRAY, null))
+                .append(new Doc(line).colors(Ansi.Color.GRAY, null))
+                .append(Doc.space().colors(Ansi.Color.GRAY, null))
+                .append(new Doc(withUnicode ? "│" : "|").colors(Ansi.Color.GRAY, null));
     }
 }
