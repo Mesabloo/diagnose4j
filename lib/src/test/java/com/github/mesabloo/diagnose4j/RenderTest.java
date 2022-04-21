@@ -116,4 +116,14 @@ public class RenderTest {
                             );
                         }}));
     }
+
+    @Test
+    public void noMarkerButSomeHints() {
+        diag = diag
+                .withReport(new Report<>(false, new StringPretty("Error with no markers but some hints"), new HashMap<>(),
+                        new ArrayList<StringPretty>() {{
+                            this.add(new StringPretty("My first hint on resolving this issue"));
+                            this.add(new StringPretty("And a second one because I'm feeling nice today :)"));
+                        }}));
+    }
 }

@@ -111,6 +111,7 @@ public class Report<Msg extends Pretty<Msg>> {
         // (5)
         if (!hints.isEmpty()) {
             doc
+                    .append(Doc.line())
                     .append(Doc.space())
                     .appendDoc(this.dotPrefix(maxLineNumberLength, withUnicode));
         }
