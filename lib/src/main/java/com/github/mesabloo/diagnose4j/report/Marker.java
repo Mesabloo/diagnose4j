@@ -44,7 +44,7 @@ public abstract class Marker<Msg extends Pretty<Msg>> implements Comparable<Mark
             if (o instanceof This)
                 return 0;
 
-            return -1;
+            return 1;
         }
     }
 
@@ -75,9 +75,9 @@ public abstract class Marker<Msg extends Pretty<Msg>> implements Comparable<Mark
             if (o instanceof Where)
                 return 0;
             if (o instanceof This)
-                return 1;
+                return -1;
 
-            return -1;
+            return 1;
         }
     }
 
@@ -106,7 +106,7 @@ public abstract class Marker<Msg extends Pretty<Msg>> implements Comparable<Mark
             if (o instanceof Maybe)
                 return 0;
 
-            return 1;
+            return -1;
         }
     }
 

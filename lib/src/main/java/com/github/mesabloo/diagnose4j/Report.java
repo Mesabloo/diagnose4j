@@ -43,11 +43,14 @@ public class Report<Msg extends Pretty<Msg>> {
      * @param message The message which should be output at the beginning
      * @param markers A map of markers to highlight specific regions of the code
      * @param hints   Additional hints to put at the end of the report
+     *
+     * @implNote The parameter <code>markers</code> is a {@link LinkedHashMap} in order to preserve insertion order
+     *           of markers (this way, first marker inserted = first marker displayed).
      */
-    public Report(final boolean isError, final Msg message, final Map<Position, Marker<Msg>> markers, final List<Msg> hints) {
+    public Report(final boolean isError, final Msg message, final LinkedHashMap<Position, Marker<Msg>> markers, final List<Msg> hints) {
         this.isError = isError;
         this.msg = message;
-        this.markers = new HashMap<>();
+        this.markers = new LinkedHashMap<>();
         this.hints = new ArrayList<>(hints);
 
         this.markers.putAll(markers);
@@ -56,9 +59,9 @@ public class Report<Msg extends Pretty<Msg>> {
     /**
      * Constructs a new report with no hints.
      *
-     * @see Report#Report(boolean, Pretty, Map, List)
+     * @see Report#Report(boolean, Pretty, LinkedHashMap, List)
      */
-    public Report(final boolean isError, final Msg message, final Map<Position, Marker<Msg>> markers) {
+    public Report(final boolean isError, final Msg message, final LinkedHashMap<Position, Marker<Msg>> markers) {
         this(isError, message, markers, new ArrayList<>());
     }
 
@@ -68,7 +71,7 @@ public class Report<Msg extends Pretty<Msg>> {
         final List<Map.Entry<Position, Marker<Msg>>> sortedMarkers = this.markers
                 .entrySet()
                 .stream()
-                .sorted(Map.Entry.comparingByKey())
+                .sorted(Comparator.comparingLong(e -> e.getKey().beginning_line))
                 .collect(Collectors.toList());
         // sort markers to have the first lines of the report at the beginning
 
@@ -133,7 +136,7 @@ public class Report<Msg extends Pretty<Msg>> {
     private List<Map.Entry<Boolean, List<Map.Entry<Position, Marker<Msg>>>>> groupMarkersPerFile(
             List<Map.Entry<Position, Marker<Msg>>> sortedMarkers
     ) {
-        final HashMap<String, List<Map.Entry<Position, Marker<Msg>>>> markersPerFile = new HashMap<>();
+        final LinkedHashMap<String, List<Map.Entry<Position, Marker<Msg>>>> markersPerFile = new LinkedHashMap<>();
 
         for (final Map.Entry<Position, Marker<Msg>> entry : sortedMarkers) {
             final Position pos = entry.getKey();
@@ -182,6 +185,7 @@ public class Report<Msg extends Pretty<Msg>> {
         final List<Map.Entry<Position, Marker<Msg>>> multilineMarkers = new ArrayList<>();
         this.splitInlineMarkers(markers, inlineMarkers, multilineMarkers);
         // split markers to separate inline and multiline markers
+
         final List<Map.Entry<Long, List<Map.Entry<Position, Marker<Msg>>>>> sortedMarkerPerLine = inlineMarkers.entrySet()
                 .stream()
                 .sorted(Map.Entry.comparingByKey())
@@ -420,8 +424,9 @@ public class Report<Msg extends Pretty<Msg>> {
         Document doc = new Document();
 
         if (!allInlineMarkersInLine.isEmpty()) {
-            final List<Map.Entry<Position, Marker<Msg>>> markers = new ArrayList<>(allInlineMarkersInLine);
-            markers.sort(Comparator.comparingLong(e -> e.getKey().ending_column));
+            final List<Map.Entry<Position, Marker<Msg>>> markers = allInlineMarkersInLine.stream()
+                    .sorted(Comparator.comparingLong(e -> e.getKey().ending_column))
+                    .collect(Collectors.toList());
 
             final long maxMarkerColumn = markers.get(markers.size() - 1).getKey().ending_column;
             // get the maximum end column, so that we know when to stop looking for other markers on the same line
@@ -628,7 +633,7 @@ public class Report<Msg extends Pretty<Msg>> {
             final Position pos = entry.getKey();
 
             if (pos.beginning_line != pos.ending_line)
-                multilineMarkers.add(entry);
+                multilineMarkers.add(0, entry);
             else {
                 List<Map.Entry<Position, Marker<Msg>>> list;
                 if (inlineMarkers.containsKey(pos.beginning_line)) {
@@ -636,7 +641,7 @@ public class Report<Msg extends Pretty<Msg>> {
                 } else {
                     list = new ArrayList<>();
                 }
-                list.add(0, entry);
+                list.add(entry);
                 inlineMarkers.put(pos.beginning_line, list);
             }
         }

@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class RenderTest {
@@ -46,13 +47,13 @@ public class RenderTest {
     @Test
     public void noHintsAndNoMarkers() {
         diag = diag
-                .withReport(new Report<>(true, new StringPretty("Error with no marker and no hints"), new HashMap<>()));
+                .withReport(new Report<>(true, new StringPretty("Error with no marker and no hints"), new LinkedHashMap<>()));
     }
 
     @Test
     public void singleMarkerNoHints() {
         diag = diag
-                .withReport(new Report<>(true, new StringPretty("Error with one marker and no hints"), new HashMap<Position, Marker<StringPretty>>() {{
+                .withReport(new Report<>(true, new StringPretty("Error with one marker and no hints"), new LinkedHashMap<Position, Marker<StringPretty>>() {{
                     this.put(new Position(1, 25, 1, 30, "test.zc"), new Marker.This<>(new StringPretty("Required here")));
                 }}));
     }
@@ -60,19 +61,20 @@ public class RenderTest {
     @Test
     public void simpleDiagnostic() {
         diag = diag
-                .withReport(new Report<>(true, new StringPretty("Could not deduce constraint 'Num(a)' from the current context"), new HashMap<Position, Marker<StringPretty>>() {{
-                    this.put(
-                            new Position(1, 25, 1, 30, "test.zc"),
-                            new Marker.This<>(new StringPretty("While applying function '+'"))
-                    );
-                    this.put(
-                            new Position(1, 11, 1, 16, "test.zc"),
-                            new Marker.Where<>(new StringPretty("'x' is supposed to have type 'a'"))
-                    );
-                    this.put(
-                            new Position(1, 8, 1, 9, "test.zc"),
-                            new Marker.Where<>(new StringPretty("type 'a' is bound here without constraints"))
-                    );
+                .withReport(new Report<>(true, new StringPretty("Could not deduce constraint 'Num(a)' from the current context"),
+                        new LinkedHashMap<Position, Marker<StringPretty>>() {{
+                            this.put(
+                                    new Position(1, 25, 1, 30, "test.zc"),
+                                    new Marker.This<>(new StringPretty("While applying function '+'"))
+                            );
+                            this.put(
+                                    new Position(1, 11, 1, 16, "test.zc"),
+                                    new Marker.Where<>(new StringPretty("'x' is supposed to have type 'a'"))
+                            );
+                            this.put(
+                                    new Position(1, 8, 1, 9, "test.zc"),
+                                    new Marker.Where<>(new StringPretty("type 'a' is bound here without constraints"))
+                            );
                 }}, new ArrayList<StringPretty>() {{
                     this.add(new StringPretty("Adding 'Num(a)' to the list of constraints may solve this problem."));
                 }}));
@@ -82,7 +84,7 @@ public class RenderTest {
     public void multilineMessages() {
         diag = diag
                 .withReport(new Report<>(true, new StringPretty("Could not deduce constraint 'Num(a)'\nfrom the current context"),
-                        new HashMap<Position, Marker<StringPretty>>() {{
+                        new LinkedHashMap<Position, Marker<StringPretty>>() {{
                             this.put(
                                     new Position(1, 25, 1, 30, "test.zc"),
                                     new Marker.This<>(new StringPretty("While applying function '+'"))
@@ -105,7 +107,7 @@ public class RenderTest {
     public void multipleFiles() {
         diag = diag
                 .withReport(new Report<>(true, new StringPretty("Error on multiple files"),
-                        new HashMap<Position, Marker<StringPretty>>() {{
+                        new LinkedHashMap<Position, Marker<StringPretty>>() {{
                             this.put(
                                     new Position(1, 5, 1, 7, "test.zc"),
                                     new Marker.Where<>(new StringPretty("Function already defined here"))
@@ -120,10 +122,26 @@ public class RenderTest {
     @Test
     public void noMarkerButSomeHints() {
         diag = diag
-                .withReport(new Report<>(false, new StringPretty("Error with no markers but some hints"), new HashMap<>(),
+                .withReport(new Report<>(false, new StringPretty("Error with no markers but some hints"), new LinkedHashMap<>(),
                         new ArrayList<StringPretty>() {{
                             this.add(new StringPretty("My first hint on resolving this issue"));
                             this.add(new StringPretty("And a second one because I'm feeling nice today :)"));
+                        }}));
+    }
+
+    @Test
+    public void testCrossing() {
+        diag = diag
+                .withReport(new Report<>(false, new StringPretty("Ordered labels with crossing"),
+                        new LinkedHashMap<Position, Marker<StringPretty>>() {{
+                            this.put(
+                                    new Position(1, 1, 1, 7, "somefile.zc"),
+                                    new Marker.This<>(new StringPretty("leftmost label"))
+                            );
+                            this.put(
+                                    new Position(1, 9, 1, 16, "somefile.zc"),
+                                    new Marker.Where<>(new StringPretty("rightmost label"))
+                            );
                         }}));
     }
 }
